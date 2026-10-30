@@ -1,3 +1,5 @@
+import { ensureHelpNote } from './services/today/TodayService';
+import { scheduleTodayNotifications } from './services/today/TodayNotifications';
 import * as React from 'react';
 import PerformanceLogger from '@joplin/lib/PerformanceLogger';
 PerformanceLogger.onAppStartBegin();
@@ -165,6 +167,11 @@ const generalMiddleware = (store: any) => (next: any) => async (action: any) => 
 	if (['NOTE_UPDATE_ONE', 'NOTE_DELETE', 'FOLDER_UPDATE_ONE', 'FOLDER_DELETE'].indexOf(action.type) >= 0) {
 		if (!await reg.syncTarget().syncStarted()) void reg.scheduleSync(reg.syncAsYouTypeInterval(), { syncSteps: Synchronizer.partialSyncSteps }, true);
 		SearchEngine.instance().scheduleSyncTables();
+	}
+
+	if (['NOTE_UPDATE_ONE', 'NOTE_DELETE'].includes(action.type)) scheduleTodayNotifications();
+	if (action.type === 'NOTE_DELETE') {
+		setTimeout(() => void ensureHelpNote().catch(error => reg.logger().error('Could not restore help note', error)), 1000);
 	}
 
 	if (['FOLDER_UPDATE_ONE'].indexOf(action.type) >= 0) {

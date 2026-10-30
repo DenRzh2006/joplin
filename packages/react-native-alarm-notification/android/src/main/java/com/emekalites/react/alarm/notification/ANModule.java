@@ -1,6 +1,11 @@
 package com.emekalites.react.alarm.notification;
 
 import android.app.Activity;
+import android.app.AlarmManager;
+import android.content.Context;
+import android.net.Uri;
+import android.os.Build;
+import android.provider.Settings;
 import android.app.Application;
 import android.content.Intent;
 import android.os.Bundle;
@@ -67,6 +72,23 @@ public class ANModule extends ReactContextBaseJavaModule implements ActivityEven
     }
 
     @ReactMethod
+    public void exactAlarmPermission(boolean request, Promise promise) {
+        try {
+            AlarmManager manager = (AlarmManager) mReactContext.getSystemService(Context.ALARM_SERVICE);
+            boolean allowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || manager.canScheduleExactAlarms();
+            if (!allowed && request && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                Intent intent = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                        Uri.parse("package:" + mReactContext.getPackageName()));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                mReactContext.startActivity(intent);
+            }
+            promise.resolve(allowed);
+        } catch (Exception e) {
+            promise.reject("E_EXACT_ALARM_PERMISSION", e);
+        }
+    }
+
+    @ReactMethod
     public void scheduleAlarm(ReadableMap details, Promise promise) {
         try {
             Bundle bundle = Arguments.toBundle(details);
@@ -77,6 +99,9 @@ public class ANModule extends ReactContextBaseJavaModule implements ActivityEven
             if (!containAlarm) {
                 int id = getAlarmDB().insert(alarm);
                 alarm.setId(id);
+                // Distinct PendingIntent request codes are required even for alarms created in the same second.
+                alarm.setAlarmId(id);
+                getAlarmDB().update(alarm);
 
                 alarmUtil.setAlarm(alarm);
 

@@ -102,6 +102,8 @@ const config = {
 			},
 		),
 	},
+	// The Android Gradle plugin passes an entry path relative to the mobile app.
+	server: { unstable_serverRoot: path.resolve(__dirname) },
 	projectRoot: path.resolve(__dirname),
 	watchFolders: watchedFolders,
 };

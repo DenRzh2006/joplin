@@ -40,16 +40,19 @@ public class AlarmReceiver extends BroadcastReceiver {
             String action = intent.getAction();
             if (action != null) {
                 Log.i(Constants.TAG, "ACTION: " + action);
+                if (action.startsWith(Constants.NOTIFICATION_ACTION_SNOOZE + "_")) action = Constants.NOTIFICATION_ACTION_SNOOZE;
                 switch (action) {
                     case Constants.NOTIFICATION_ACTION_SNOOZE:
                         int id = intent.getExtras().getInt("SnoozeAlarmId");
 
                         try {
                             AlarmModel alarm = alarmDB.getAlarm(id);
+                            alarmUtil.removeFiredNotification(alarm.getId());
+                            int minutes = intent.getIntExtra("SnoozeMinutes", alarm.getSnoozeInterval());
+                            alarm.setSnoozeInterval(minutes);
                             alarmUtil.snoozeAlarm(alarm);
                             Log.i(Constants.TAG, "alarm snoozed: " + alarm.toString());
 
-                            alarmUtil.removeFiredNotification(alarm.getId());
                         } catch (Exception e) {
                             Log.e(Constants.TAG, "Failed to snooze alarm", e);
                         }

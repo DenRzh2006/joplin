@@ -76,7 +76,9 @@ class AlarmUtil {
     }
 
     boolean checkAlarm(ArrayList<AlarmModel> alarms, AlarmModel alarm) {
+        if (alarm.getData() != null && alarm.getData().containsKey("todayKey")) return false;
         for (AlarmModel aAlarm : alarms) {
+            if (aAlarm.getData() != null && aAlarm.getData().containsKey("todayKey")) continue;
             if (aAlarm.isSameTime(alarm) && aAlarm.getActive() == 1) {
                 Toast.makeText(context, "You have already set this Alarm", Toast.LENGTH_SHORT).show();
                 return true;
@@ -111,7 +113,13 @@ class AlarmUtil {
 
         if (scheduleType.equals("once")) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, calendar.getTimeInMillis(), alarmIntent);
+                boolean todayAlarm = alarm.getData() != null && (alarm.getData().containsKey("todayKey") || alarm.getData().containsKey("todaySnoozeKey"));
+                boolean canBeExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms();
+                if (todayAlarm && canBeExact) {
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, calendar.getTimeInMillis(), alarmIntent);
+                } else {
+                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, calendar.getTimeInMillis(), alarmIntent);
+                }
             } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
                 alarmManager.setExact(AlarmManager.RTC_WAKEUP, calendar.getTimeInMillis(), alarmIntent);
             } else {
@@ -131,7 +139,13 @@ class AlarmUtil {
     void snoozeAlarm(AlarmModel alarm) {
         Log.i(Constants.TAG, "Snooze alarm: " + alarm.toString());
 
-        Calendar calendar = alarm.snooze();
+        Calendar calendar = Calendar.getInstance();
+        calendar.add(Calendar.MINUTE, alarm.getSnoozeInterval());
+        alarm.setAlarmDateTime(calendar);
+        if (alarm.getData() != null && alarm.getData().containsKey("todayKey")) {
+            alarm.getData().putString("todaySnoozeKey", alarm.getData().getString("todayKey"));
+            alarm.getData().remove("todayKey");
+        }
 
         long time = System.currentTimeMillis() / 1000;
 
@@ -153,7 +167,13 @@ class AlarmUtil {
 
         if (scheduleType.equals("once")) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, calendar.getTimeInMillis(), alarmIntent);
+                boolean todayAlarm = alarm.getData() != null && (alarm.getData().containsKey("todayKey") || alarm.getData().containsKey("todaySnoozeKey"));
+                boolean canBeExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms();
+                if (todayAlarm && canBeExact) {
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, calendar.getTimeInMillis(), alarmIntent);
+                } else {
+                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, calendar.getTimeInMillis(), alarmIntent);
+                }
             } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
                 alarmManager.setExact(AlarmManager.RTC_WAKEUP, calendar.getTimeInMillis(), alarmIntent);
             } else {
@@ -322,9 +342,11 @@ class AlarmUtil {
                 smallIconResId = res.getIdentifier("ic_launcher", "mipmap", packageName);
             }
 
-            Intent intent = new Intent(context, intentClass);
+            boolean todayReminder = alarm.getData() != null && (alarm.getData().containsKey("todayKey") || alarm.getData().containsKey("todaySnoozeKey"));
+            Intent intent = new Intent(context, todayReminder ? SnoozeActivity.class : intentClass);
+            if (todayReminder) intent.putExtra("SnoozeAlarmId", alarm.getId());
             intent.setAction(Constants.NOTIFICATION_ACTION_CLICK);
-            intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            if (!todayReminder) intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
 
             intent.putExtra(Constants.NOTIFICATION_ID, alarm.getId());
             intent.putExtra("data", alarm.getData());
@@ -337,7 +359,7 @@ class AlarmUtil {
                     .setContentText(message)
                     .setTicker(alarm.getTicker())
                     .setPriority(NotificationCompat.PRIORITY_MAX)
-                    .setAutoCancel(alarm.isAutoCancel())
+                    .setAutoCancel(todayReminder ? false : alarm.isAutoCancel())
                     .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                     .setCategory(NotificationCompat.CATEGORY_ALARM)
                     .setSound(null)
@@ -387,20 +409,21 @@ class AlarmUtil {
 
             mBuilder.setContentIntent(pendingIntent);
 
-            if (alarm.isHasButton()) {
+            if (todayReminder) mBuilder.setSubText("Нажмите, чтобы отложить");
+
+            if (alarm.isHasButton() && !todayReminder) {
                 Intent dismissIntent = new Intent(context, AlarmReceiver.class);
                 dismissIntent.setAction(NOTIFICATION_ACTION_DISMISS);
                 dismissIntent.putExtra("AlarmId", alarm.getId());
                 PendingIntent pendingDismiss = PendingIntent.getBroadcast(context, notificationID, dismissIntent, defaultFlags | PendingIntent.FLAG_UPDATE_CURRENT);
                 NotificationCompat.Action dismissAction = new NotificationCompat.Action(android.R.drawable.ic_lock_idle_alarm, "DISMISS", pendingDismiss);
-                mBuilder.addAction(dismissAction);
+                if (alarm.getData() == null || !(alarm.getData().containsKey("todayKey") || alarm.getData().containsKey("todaySnoozeKey"))) mBuilder.addAction(dismissAction);
 
                 Intent snoozeIntent = new Intent(context, AlarmReceiver.class);
                 snoozeIntent.setAction(NOTIFICATION_ACTION_SNOOZE);
                 snoozeIntent.putExtra("SnoozeAlarmId", alarm.getId());
                 PendingIntent pendingSnooze = PendingIntent.getBroadcast(context, notificationID, snoozeIntent, defaultFlags | PendingIntent.FLAG_UPDATE_CURRENT);
-                NotificationCompat.Action snoozeAction = new NotificationCompat.Action(R.drawable.ic_snooze, "SNOOZE", pendingSnooze);
-                mBuilder.addAction(snoozeAction);
+                mBuilder.addAction(new NotificationCompat.Action(R.drawable.ic_snooze, "SNOOZE", pendingSnooze));
             }
 
             //use big text

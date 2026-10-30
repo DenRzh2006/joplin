@@ -1,3 +1,5 @@
+import { refreshTodayNote, refreshStatisticsNote, ensureHelpNote } from '../services/today/TodayService';
+import { startTodayNotifications, scheduleTodayNotifications } from '../services/today/TodayNotifications';
 import PluginAssetsLoader from '../PluginAssetsLoader';
 import AlarmService from '@joplin/lib/services/AlarmService';
 import eventManager, { EventName, NoteLockSessionChangeEvent } from '@joplin/lib/eventManager';
@@ -488,6 +490,8 @@ const buildStartupTasks = (
 				// Wait for the first sync before updating the notifications, since synchronisation
 				// might change the notifications.
 				void AlarmService.updateAllNotifications();
+				void refreshTodayNote().catch(error => logger.error('Could not refresh Today note after sync', error));
+				scheduleTodayNotifications();
 
 				void DecryptionWorker.instance().scheduleStart();
 
@@ -499,6 +503,9 @@ const buildStartupTasks = (
 	});
 	addTask('buildStartupTasks/set up welcome utils', async () => {
 		await WelcomeUtils.install(Setting.value('locale'), dispatch);
+	});
+	addTask('buildStartupTasks/refresh Today note', async () => {
+		try { await refreshTodayNote(); await refreshStatisticsNote(); await ensureHelpNote(); startTodayNotifications(); } catch (error) { logger.error('Could not initialize Today note', error); }
 	});
 	addTask('buildStartupTasks/set up plugin service', async () => {
 		// Even if there are no plugins, we need to initialize the PluginService so that

@@ -1,3 +1,4 @@
+import { isTodayNote, isStatisticsNote, propagateTodayCheckbox, propagateTodayEditorChanges, refreshTodayNote, refreshStatisticsNote } from '../../../services/today/TodayService';
 import AsyncActionQueue from '@joplin/lib/AsyncActionQueue';
 import uuid from '@joplin/lib/uuid';
 import Setting from '@joplin/lib/models/Setting';
@@ -638,6 +639,14 @@ class NoteScreenComponent extends BaseScreenComponent<ComponentProps, State> imp
 
 		if (isNoteLockEnabled()) eventManager.on(EventName.NoteLockNoteStateChange, this.noteLockNoteStateChange_);
 
+		try {
+			const note = this.props.noteId && await Note.load(this.props.noteId);
+			if (note && isTodayNote(note.body)) await refreshTodayNote();
+			if (note && isStatisticsNote(note.body)) await refreshStatisticsNote();
+		} catch (error) {
+			logger.error('Could not refresh Today note on opening', error);
+		}
+
 		await shared.initState(this);
 
 		this.undoRedoService_ = new UndoRedoService();
@@ -927,6 +936,7 @@ class NoteScreenComponent extends BaseScreenComponent<ComponentProps, State> imp
 
 	public makeSaveAction(state: State, editorNoteReloadTimeRequest: number) {
 		return async () => {
+			await propagateTodayEditorChanges(state.note.id, state.note.body);
 			return shared.saveNoteButton_press(this, state, null, {
 				editorNoteReloadTimeRequest,
 				getEditorNoteReloadTimeRequest: () => this.props.editorNoteReloadTimeRequest,
@@ -948,6 +958,7 @@ class NoteScreenComponent extends BaseScreenComponent<ComponentProps, State> imp
 	}
 
 	private async saveNoteButton_press(folderId: string = null) {
+		await propagateTodayEditorChanges(this.state.note.id, this.state.note.body);
 		await shared.saveNoteButton_press(this, this.state, folderId, null);
 
 		Keyboard.dismiss();
@@ -1817,8 +1828,19 @@ class NoteScreenComponent extends BaseScreenComponent<ComponentProps, State> imp
 
 	private onMarkdownEditorScroll = () => {};
 
+	private todayCheckboxRenderKey_ = 0;
+
 	public onBodyViewerCheckboxChange(newBody: string) {
-		void this.saveOneProperty('body', newBody);
+		void (async () => {
+			try {
+				await propagateTodayCheckbox(this.state.note.body, newBody);
+				await this.saveOneProperty('body', newBody);
+			} catch (error) {
+				this.todayCheckboxRenderKey_++;
+				this.forceUpdate();
+				await this.props.dialogs.error(error.message);
+			}
+		})();
 	}
 
 	private speechToTextDialog_onText(text: string) {
@@ -1936,6 +1958,7 @@ class NoteScreenComponent extends BaseScreenComponent<ComponentProps, State> imp
 				bodyComponent =
 					!note || !note.body.trim() ? null : (
 						<NoteBodyViewer
+							key={this.todayCheckboxRenderKey_}
 							style={this.styles().noteBodyViewer}
 							paddingBottom={150}
 							noteBody={note.body}

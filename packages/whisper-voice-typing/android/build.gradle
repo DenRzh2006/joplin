@@ -46,6 +46,7 @@ android {
   namespace "com.margelo.nitro.whispervoicetyping"
 
   compileSdkVersion getExtOrDefault("compileSdkVersion")
+  if (rootProject.ext.has("ndkVersion")) ndkVersion rootProject.ext.ndkVersion
 
   defaultConfig {
     minSdkVersion getExtOrDefault("minSdkVersion")

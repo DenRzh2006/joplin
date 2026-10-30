@@ -3,10 +3,14 @@
 
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 	<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application>
+        <activity android:name="com.emekalites.react.alarm.notification.SnoozeActivity"
+            android:exported="false" android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Material.Dialog.Alert" />
         <receiver
             android:name="com.emekalites.react.alarm.notification.AlarmReceiver"
             android:enabled="true"
